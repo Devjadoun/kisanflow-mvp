@@ -20,7 +20,7 @@ import { isSMSProviderConfigured } from '../../services/notificationService';
 
 export const RegistrationPage = () => {
   const navigate = useNavigate();
-  const { setUserRole, setFarmerProfile } = useApp();
+  const { setUserRole, loginFarmer } = useApp();
 
   // Step 1: Profile Details, Step 2: OTP Verification
   const [step, setStep] = useState(1);
@@ -135,7 +135,7 @@ export const RegistrationPage = () => {
       });
 
       setUserRole('farmer');
-      setFarmerProfile(profile);
+      await loginFarmer(profile);
 
       navigate('/farmer');
     } catch (err) {

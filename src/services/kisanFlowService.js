@@ -50,17 +50,31 @@ const setLocal = (key, val) => {
  * Verifies if mobile number is already registered
  */
 export const checkPhoneExists = async (phone) => {
-  const digitsOnly = phone.trim().replace(/\D/g, '').slice(-10);
+  const digitsOnly = (phone || '').trim().replace(/\D/g, '').slice(-10);
   if (!digitsOnly || digitsOnly.length < 10) return false;
 
   if (isSupabaseConfigured() && supabase) {
     try {
+      const formattedVariants = [
+        digitsOnly,
+        `+91${digitsOnly}`,
+        `+91 ${digitsOnly}`,
+        `+91 ${digitsOnly.slice(0, 5)} ${digitsOnly.slice(5)}`,
+        `${digitsOnly.slice(0, 5)} ${digitsOnly.slice(5)}`,
+      ];
+      const orFilter = formattedVariants.map(v => `phone.eq.${v}`).join(',');
       const { data, error } = await supabase
         .from('profiles')
         .select('id, phone')
-        .or(`phone.eq.${digitsOnly},phone.eq.+91${digitsOnly},phone.eq.+91 ${digitsOnly}`)
+        .or(orFilter)
         .limit(1);
       if (!error && data && data.length > 0) return true;
+
+      // Fallback check: check all profiles if small set
+      const { data: allP } = await supabase.from('profiles').select('phone');
+      if (allP && allP.some(p => (p.phone || '').replace(/\D/g, '').slice(-10) === digitsOnly)) {
+        return true;
+      }
     } catch {}
   }
 
@@ -73,7 +87,7 @@ export const checkPhoneExists = async (phone) => {
 
 /**
  * 2. registerFarmer
- * Creates a new authoritative farmer record in PostgreSQL
+ * Creates a new authoritative farmer record in PostgreSQL with UUID relationship
  */
 export const registerFarmer = async ({
   name,
@@ -83,72 +97,86 @@ export const registerFarmer = async ({
   state = 'Uttar Pradesh',
   preferredLanguage = 'Hindi / English',
 }) => {
-  const normPhone = phone.trim().replace(/\s+/g, '');
-  const profileId = `prof-${Date.now()}`;
-  const farmerId = `farm-${Date.now()}`;
+  const cleanDigits = (phone || '').trim().replace(/\D/g, '').slice(-10);
+  const normPhone = `+91 ${cleanDigits.slice(0, 5)} ${cleanDigits.slice(5)}`;
+  
+  const genUuid = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  const profileId = genUuid();
+  const farmerId = genUuid();
 
   let createdProfile = {
     id: profileId,
-    name,
+    profileId: profileId,
+    farmerId: farmerId,
+    name: name.trim(),
     phone: normPhone,
     role: 'farmer',
-    village,
-    district,
-    state,
+    village: village.trim(),
+    district: district.trim(),
+    state: state.trim(),
     preferredLanguage,
     points: 0,
     created_at: new Date().toISOString(),
   };
 
-  if (isSupabaseConfigured() && supabase && isTableAvailable('profiles')) {
+  if (isSupabaseConfigured() && supabase) {
     try {
       // Insert into profiles
       const { data: pData, error: pErr } = await supabase
         .from('profiles')
         .insert([{
-          name,
+          id: profileId,
+          name: name.trim(),
           phone: normPhone,
           role: 'farmer',
         }])
         .select()
         .single();
 
-      if (pErr) {
-        markTableUnavailable('profiles');
-      } else if (pData) {
+      if (!pErr && pData) {
         createdProfile.id = pData.id;
-        // Insert into farmers
-        if (isTableAvailable('farmers')) {
-          const { data: fData, error: fErr } = await supabase
-            .from('farmers')
-            .insert([{
-              profile_id: pData.id,
-              village,
-              district,
-            }])
-            .select()
-            .single();
+        createdProfile.profileId = pData.id;
+        // Insert into farmers with profile_id FK
+        const { data: fData, error: fErr } = await supabase
+          .from('farmers')
+          .insert([{
+            id: farmerId,
+            profile_id: pData.id,
+            village: village.trim(),
+            district: district.trim(),
+          }])
+          .select()
+          .single();
 
-          if (fErr) markTableUnavailable('farmers');
-          else if (fData) createdProfile.farmerId = fData.id;
+        if (!fErr && fData) {
+          createdProfile.farmerId = fData.id;
         }
       }
-    } catch {
-      markTableUnavailable('profiles');
-    }
+    } catch {}
   }
 
   // Persist locally
   const profiles = getLocal(LOCAL_STORAGE_KEYS.PROFILES, []);
-  setLocal(LOCAL_STORAGE_KEYS.PROFILES, [createdProfile, ...profiles]);
+  setLocal(LOCAL_STORAGE_KEYS.PROFILES, [createdProfile, ...profiles.filter(p => p.id !== createdProfile.id && p.phone !== createdProfile.phone)]);
   setLocal(LOCAL_STORAGE_KEYS.FARMER_PROFILE, createdProfile);
+  setLocal('kf_session_profile', createdProfile);
 
   // Emit USER_REGISTERED event
   await recordEvent('USER_REGISTERED', createdProfile.id, createdProfile.id, {
-    name,
+    name: createdProfile.name,
     phone: normPhone,
-    village,
-    district,
+    village: createdProfile.village,
+    district: createdProfile.district,
   });
 
   return createdProfile;
@@ -156,16 +184,37 @@ export const registerFarmer = async ({
 
 /**
  * 3. getFarmerProfileByPhone
+ * Authenticates & resolves farmer identity from phone number
  */
 export const getFarmerProfileByPhone = async (phone) => {
-  const normPhone = (phone || '').trim().replace(/\s+/g, '');
+  const cleanDigits = (phone || '').trim().replace(/\D/g, '').slice(-10);
+  if (!cleanDigits || cleanDigits.length < 10) return null;
+
   if (isSupabaseConfigured() && supabase) {
     try {
-      const { data: profile } = await supabase
+      const formattedVariants = [
+        cleanDigits,
+        `+91${cleanDigits}`,
+        `+91 ${cleanDigits}`,
+        `+91 ${cleanDigits.slice(0, 5)} ${cleanDigits.slice(5)}`,
+        `${cleanDigits.slice(0, 5)} ${cleanDigits.slice(5)}`,
+      ];
+      const orFilter = formattedVariants.map(v => `phone.eq.${v}`).join(',');
+
+      let { data: profile } = await supabase
         .from('profiles')
         .select('id, name, phone, role')
-        .eq('phone', normPhone)
+        .or(orFilter)
+        .limit(1)
         .maybeSingle();
+
+      // If .or did not hit directly, search profiles by digits matching
+      if (!profile) {
+        const { data: allProfiles } = await supabase.from('profiles').select('id, name, phone, role');
+        if (allProfiles) {
+          profile = allProfiles.find(p => (p.phone || '').replace(/\D/g, '').slice(-10) === cleanDigits);
+        }
+      }
 
       if (profile) {
         const { data: farmer } = await supabase
@@ -176,10 +225,12 @@ export const getFarmerProfileByPhone = async (phone) => {
 
         return {
           id: profile.id,
+          profileId: profile.id,
+          farmerId: farmer ? farmer.id : profile.id,
           name: profile.name,
           phone: profile.phone,
           role: profile.role,
-          village: farmer?.village || 'Local Tehsil',
+          village: farmer?.village || 'Dhoom Manikpur, Dadri',
           district: farmer?.district || 'Gautam Buddha Nagar',
           state: 'Uttar Pradesh',
           preferredLanguage: 'Hindi / English',
@@ -189,9 +240,28 @@ export const getFarmerProfileByPhone = async (phone) => {
     } catch {}
   }
 
+  // Check local storage profiles
   const localProfiles = getLocal(LOCAL_STORAGE_KEYS.PROFILES, []);
-  const found = localProfiles.find(p => (p.phone || '').replace(/\s+/g, '') === normPhone);
-  return found || null;
+  const found = localProfiles.find(p => (p.phone || '').replace(/\D/g, '').slice(-10) === cleanDigits);
+  if (found) {
+    return {
+      ...found,
+      profileId: found.id || found.profileId,
+      farmerId: found.farmerId || found.id,
+    };
+  }
+
+  // Check if active profile matches
+  const activeProfile = getLocal(LOCAL_STORAGE_KEYS.FARMER_PROFILE, null);
+  if (activeProfile && (activeProfile.phone || '').replace(/\D/g, '').slice(-10) === cleanDigits) {
+    return {
+      ...activeProfile,
+      profileId: activeProfile.id || activeProfile.profileId,
+      farmerId: activeProfile.farmerId || activeProfile.id,
+    };
+  }
+
+  return null;
 };
 
 /**
@@ -239,6 +309,7 @@ export const createBooking = async (bookingData) => {
   let createdRecord = {
     bookingId,
     token,
+    farmerId: bookingData.farmerId || null,
     centreId: selectedCentre.id,
     centreName: selectedCentre.name,
     commodityId: selectedCommodity.id,
@@ -264,6 +335,7 @@ export const createBooking = async (bookingData) => {
     try {
       const payload = {
         booking_id: createdRecord.bookingId,
+        farmer_id: bookingData.farmerId || null,
         centre_id: createdRecord.centreId,
         commodity_id: createdRecord.commodityId,
         quantity: createdRecord.quantityKg,
@@ -308,6 +380,9 @@ export const createBooking = async (bookingData) => {
   const allBookings = getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
   setLocal(LOCAL_STORAGE_KEYS.BOOKINGS, [createdRecord, ...allBookings]);
   setLocal(LOCAL_STORAGE_KEYS.ACTIVE_BOOKING, createdRecord);
+  if (bookingData.farmerId) {
+    setLocal(`kf_activeBooking_${bookingData.farmerId}`, createdRecord);
+  }
 
   // Mirror to operator bookings
   const opBookingItem = {
@@ -380,6 +455,7 @@ export const getBooking = async (idOrToken) => {
         return {
           id: data.id,
           bookingId: data.booking_id,
+          farmerId: data.farmer_id,
           token: data.token,
           centreId: data.centre_id,
           centreName: centre.name,
@@ -406,18 +482,91 @@ export const getBooking = async (idOrToken) => {
 };
 
 /**
- * 7. getFarmerBookings
- * Fetches all bookings for a farmer. Returns empty array if none exist.
+ * 6b. getActiveBookingForFarmer
+ * Fetches the active (uncompleted/uncancelled) booking strictly for the specified farmer.
  */
-export const getFarmerBookings = async (farmerPhoneOrId = null) => {
-  if (isSupabaseConfigured() && supabase) {
+export const getActiveBookingForFarmer = async (farmerId = null, farmerPhone = null) => {
+  if (!farmerId && !farmerPhone) return null;
+
+  if (isSupabaseConfigured() && supabase && farmerId) {
     try {
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
+        .eq('farmer_id', farmerId)
+        .not('status', 'in', '("completed","cancelled","no_show")')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        const comm = COMMODITIES.find(c => c.id === data.commodity_id) || COMMODITIES[0];
+        const centre = PROCUREMENT_CENTRES.find(c => c.id === data.centre_id) || PROCUREMENT_CENTRES[0];
+        return {
+          id: data.id,
+          supabaseId: data.id,
+          bookingId: data.booking_id,
+          farmerId: data.farmer_id,
+          token: data.token,
+          centreId: data.centre_id,
+          centreName: centre.name,
+          commodityId: data.commodity_id,
+          commodityName: comm.name,
+          quantityKg: Number(data.quantity),
+          ratePerKg: comm.mspPerKg,
+          ratePerQuintal: comm.mspPerQuintal,
+          status: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+          queuePosition: data.queue_position,
+          predictedWaitMinutes: data.predicted_wait_minutes,
+          totalEstimatedAmount: Number(data.total_estimated_amount),
+          date: new Date(data.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+          rawDate: new Date(data.created_at).toISOString().split('T')[0],
+          timeSlot: '11:00 AM - 12:00 PM',
+          vehicleType: 'Tractor Trolley',
+          paymentStatus: data.status.toLowerCase() === 'completed' ? 'Successful' : 'Pending Procurement',
+        };
+      }
+    } catch {}
+  }
+
+  // Check farmer-specific isolated local storage
+  if (farmerId) {
+    const isolated = getLocal(`kf_activeBooking_${farmerId}`, null);
+    if (isolated && (isolated.farmerId === farmerId || !isolated.farmerId)) return isolated;
+  }
+
+  const cleanDigits = farmerPhone ? farmerPhone.replace(/\D/g, '').slice(-10) : null;
+  const allBookings = getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
+  const active = allBookings.find(b => {
+    const matchId = farmerId && b.farmerId === farmerId;
+    const matchPhone = cleanDigits && (b.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanDigits;
+    const isUnfinished = (b.status || '').toLowerCase() !== 'completed' && (b.status || '').toLowerCase() !== 'cancelled';
+    return (matchId || matchPhone) && isUnfinished;
+  });
+
+  return active || null;
+};
+
+/**
+ * 7. getFarmerBookings
+ * Fetches all bookings strictly for the specified farmer.
+ * DATA ISOLATION ENFORCEMENT: Never leaks records if unauthenticated or mismatched.
+ */
+export const getFarmerBookings = async (farmerId = null, farmerPhone = null) => {
+  // STRICT DATA ISOLATION: Unauthenticated or empty identity must NEVER leak records!
+  if (!farmerId && !farmerPhone) {
+    return [];
+  }
+
+  if (isSupabaseConfigured() && supabase && farmerId) {
+    try {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('farmer_id', farmerId)
         .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         return data.map(d => {
           const comm = COMMODITIES.find(c => c.id === d.commodity_id) || COMMODITIES[0];
           const centre = PROCUREMENT_CENTRES.find(c => c.id === d.centre_id) || PROCUREMENT_CENTRES[0];
@@ -425,6 +574,7 @@ export const getFarmerBookings = async (farmerPhoneOrId = null) => {
             id: d.id,
             bookingId: d.booking_id,
             token: d.token,
+            farmerId: d.farmer_id,
             centreId: d.centre_id,
             centreName: centre.name,
             commodityId: d.commodity_id,
@@ -443,7 +593,14 @@ export const getFarmerBookings = async (farmerPhoneOrId = null) => {
     } catch {}
   }
 
-  return getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
+  // Local storage strict fallback
+  const cleanDigits = farmerPhone ? farmerPhone.replace(/\D/g, '').slice(-10) : null;
+  const localBookings = getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
+  return localBookings.filter(b => {
+    const matchId = farmerId && b.farmerId === farmerId;
+    const matchPhone = cleanDigits && (b.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanDigits;
+    return matchId || matchPhone;
+  });
 };
 
 /**

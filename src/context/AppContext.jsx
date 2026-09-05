@@ -55,7 +55,7 @@ const AppContext = createContext();
 export const AppProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(() => loadStorage('kf_userRole', 'farmer'));
   const [activeBooking, setActiveBooking] = useState(() => loadStorage('kf_activeBooking', null));
-  const [farmerProfile, setFarmerProfile] = useState(() => loadStorage('kf_farmerProfile', DEFAULT_FARMER_PROFILE));
+  const [farmerProfile, setFarmerProfile] = useState(() => loadStorage('kf_session_profile', DEFAULT_FARMER_PROFILE));
   const [queueList, setQueueList] = useState(() => loadStorage('kf_queueList', []));
   const [operatorBookings, setOperatorBookings] = useState(() => loadStorage('kf_operatorBookings', []));
   const [rewardsCatalog, setRewardsCatalog] = useState(() => loadStorage('kf_rewardsCatalog', REWARDS_CATALOG));
@@ -83,7 +83,13 @@ export const AppProvider = ({ children }) => {
   }, [operatorBookings]);
 
   useEffect(() => {
-    try { localStorage.setItem('kf_farmerProfile', JSON.stringify(farmerProfile)); } catch {}
+    try {
+      if (farmerProfile) {
+        localStorage.setItem('kf_session_profile', JSON.stringify(farmerProfile));
+      } else {
+        localStorage.removeItem('kf_session_profile');
+      }
+    } catch {}
   }, [farmerProfile]);
 
   useEffect(() => {
@@ -93,6 +99,58 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     try { localStorage.setItem('kf_rewardsHistory', JSON.stringify(rewardsHistory)); } catch {}
   }, [rewardsHistory]);
+
+  // Synchronize active booking strictly for the logged in farmer
+  useEffect(() => {
+    let isCancelled = false;
+    async function syncActiveBooking() {
+      const fId = farmerProfile?.farmerId || farmerProfile?.id;
+      if (fId) {
+        const active = await kisanFlowService.getActiveBookingForFarmer(fId, farmerProfile?.phone);
+        if (!isCancelled) {
+          setActiveBooking(active);
+        }
+      } else {
+        if (!isCancelled) setActiveBooking(null);
+      }
+    }
+    syncActiveBooking();
+    return () => { isCancelled = true; };
+  }, [farmerProfile?.farmerId, farmerProfile?.id]);
+
+  // Authenticate Farmer Session
+  const loginFarmer = async (profile) => {
+    setUserRole('farmer');
+    setFarmerProfile(profile);
+    try {
+      localStorage.setItem('kf_session_profile', JSON.stringify(profile));
+      localStorage.setItem('kf_userRole', JSON.stringify('farmer'));
+    } catch {}
+
+    const fId = profile?.farmerId || profile?.id;
+    if (fId) {
+      try {
+        const active = await kisanFlowService.getActiveBookingForFarmer(fId, profile.phone);
+        setActiveBooking(active);
+      } catch {
+        setActiveBooking(null);
+      }
+    } else {
+      setActiveBooking(null);
+    }
+  };
+
+  // Sign out and clear active farmer session
+  const logout = () => {
+    setFarmerProfile(null);
+    setActiveBooking(null);
+    setUserRole('farmer');
+    try {
+      localStorage.removeItem('kf_session_profile');
+      localStorage.removeItem('kf_activeBooking');
+      localStorage.removeItem('kf_farmerProfile');
+    } catch {}
+  };
 
   // Initial data load from PostgreSQL
   useEffect(() => {
@@ -237,8 +295,9 @@ export const AppProvider = ({ children }) => {
     const payload = {
       ...bookingData,
       token,
-      farmerName: farmerProfile.name,
-      farmerPhone: farmerProfile.phone,
+      farmerId: farmerProfile?.farmerId || farmerProfile?.id || null,
+      farmerName: farmerProfile?.name || 'Registered Farmer',
+      farmerPhone: farmerProfile?.phone || '+91 98765 43210',
       centreName: selectedCentre.name,
       commodityName: selectedCommodity.name,
       queuePosition: queueList.length + 1,
@@ -413,6 +472,8 @@ export const AppProvider = ({ children }) => {
         operatorBookings,
         rewardsCatalog,
         rewardsHistory,
+        loginFarmer,
+        logout,
         createBooking,
         advanceQueue,
         updateOperatorBookingStatus,

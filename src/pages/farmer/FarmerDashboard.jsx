@@ -24,6 +24,10 @@ import { SimulationNotice } from '../../components/common/SimulationNotice';
 export const FarmerDashboard = () => {
   const { activeBooking, farmerProfile, realtimeStatus, lastSyncTime } = useApp();
 
+  const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
+  const isFarmerActiveBooking = activeBooking && (!activeBooking.farmerId || !currentFarmerId || activeBooking.farmerId === currentFarmerId);
+  const currentBooking = isFarmerActiveBooking ? activeBooking : null;
+
   return (
     <div className="space-y-6 text-left">
       <SimulationNotice compact />
@@ -52,7 +56,7 @@ export const FarmerDashboard = () => {
             </span>
             <span className="text-xs text-slate-400">|</span>
             <span className="text-xs text-slate-500 font-mono">
-              Phone: {farmerProfile?.phone || '+91 98765 43210'}
+              Phone: {farmerProfile?.phone || 'Guest'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
@@ -79,21 +83,21 @@ export const FarmerDashboard = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Upcoming Booking"
-          value={activeBooking ? activeBooking.token : 'None'}
-          subtitle={activeBooking ? `${activeBooking.commodityName?.split(' ')[0]} • ${activeBooking.quantityKg} kg` : 'No active slot booked'}
+          value={currentBooking ? currentBooking.token : 'None'}
+          subtitle={currentBooking ? `${currentBooking.commodityName?.split(' ')[0]} • ${currentBooking.quantityKg} kg` : 'No active slot booked'}
           icon={Wheat}
           color="emerald"
         />
         <StatCard
           title="Queue Position"
-          value={activeBooking ? `#${activeBooking.queuePosition}` : 'N/A'}
-          subtitle={activeBooking ? `At ${activeBooking.centreName?.split(' ')[0]} Mandi` : 'Queue empty'}
+          value={currentBooking ? `#${currentBooking.queuePosition}` : 'N/A'}
+          subtitle={currentBooking ? `At ${currentBooking.centreName?.split(' ')[0]} Mandi` : 'Queue empty'}
           icon={Users}
           color="blue"
         />
         <StatCard
           title="Predicted Wait"
-          value={activeBooking ? `${activeBooking.predictedWaitMinutes} min` : '0 min'}
+          value={currentBooking ? `${currentBooking.predictedWaitMinutes} min` : '0 min'}
           subtitle="MVP Estimate • Dynamic speed"
           icon={Clock}
           color="amber"
@@ -108,7 +112,7 @@ export const FarmerDashboard = () => {
       </div>
 
       {/* Appointment Card (Active Booking OR Clean Empty State) */}
-      {activeBooking ? (
+      {currentBooking ? (
         <div className="bg-white rounded-2xl border-2 border-emerald-500 shadow-md overflow-hidden">
           <div className="bg-gradient-to-r from-emerald-800 to-emerald-950 text-white p-4 sm:px-6 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2.5">
@@ -117,10 +121,10 @@ export const FarmerDashboard = () => {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs bg-emerald-700/80 px-2.5 py-1 rounded font-mono font-bold">
-                ID: {activeBooking.bookingId}
+                ID: {currentBooking.bookingId}
               </span>
               <span className="text-xs bg-white text-emerald-900 px-2.5 py-1 rounded font-bold uppercase">
-                Status: {activeBooking.status}
+                Status: {currentBooking.status}
               </span>
             </div>
           </div>
@@ -129,36 +133,36 @@ export const FarmerDashboard = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pb-6 border-b border-slate-100">
               <div>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Procurement Centre</span>
-                <p className="text-base font-bold text-slate-900 mt-1">{activeBooking.centreName}</p>
+                <p className="text-base font-bold text-slate-900 mt-1">{currentBooking.centreName}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Counter #02 Weighbridge</p>
               </div>
 
               <div>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Commodity & Quantity</span>
                 <p className="text-base font-bold text-slate-900 mt-1">
-                  {activeBooking.commodityName}
+                  {currentBooking.commodityName}
                 </p>
                 <p className="text-xs text-slate-600 font-semibold mt-0.5">
-                  Quantity: <strong className="text-emerald-700">{activeBooking.quantityKg} kg</strong> (₹{activeBooking.ratePerQuintal}/q)
+                  Quantity: <strong className="text-emerald-700">{currentBooking.quantityKg} kg</strong> (₹{currentBooking.ratePerQuintal}/q)
                 </p>
               </div>
 
               <div>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Appointment Slot</span>
-                <p className="text-base font-bold text-slate-900 mt-1">{activeBooking.timeSlot}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{activeBooking.date}</p>
+                <p className="text-base font-bold text-slate-900 mt-1">{currentBooking.timeSlot}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{currentBooking.date}</p>
               </div>
 
               <div>
                 <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Token & Position</span>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-3xl font-black text-emerald-700 font-mono">{activeBooking.token}</span>
+                  <span className="text-3xl font-black text-emerald-700 font-mono">{currentBooking.token}</span>
                   <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                    Queue Pos: {activeBooking.queuePosition}
+                    Queue Pos: {currentBooking.queuePosition}
                   </span>
                 </div>
                 <p className="text-xs text-amber-700 font-semibold mt-0.5">
-                  Predicted Wait: {activeBooking.predictedWaitMinutes} minutes
+                  Predicted Wait: {currentBooking.predictedWaitMinutes} minutes
                 </p>
               </div>
             </div>
@@ -167,7 +171,7 @@ export const FarmerDashboard = () => {
             <div className="pt-6 flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Vehicle registered: <strong>{activeBooking.vehicleType || 'Tractor Trolley'}</strong></span>
+                <span>Vehicle registered: <strong>{currentBooking.vehicleType || 'Tractor Trolley'}</strong></span>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">

@@ -27,6 +27,7 @@ export const Navbar = () => {
     setAudioEnabled,
     activeBooking,
     farmerProfile,
+    logout,
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -192,20 +193,29 @@ export const Navbar = () => {
                 <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200 py-3 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 pb-2 border-b border-slate-100 flex items-center justify-between">
                     <span className="font-semibold text-sm text-slate-900">Procurement Alerts</span>
-                    <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
-                      Token {activeBooking?.token || 'A027'}
-                    </span>
+                    {activeBooking?.token && (
+                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
+                        Token {activeBooking.token}
+                      </span>
+                    )}
                   </div>
                   <div className="p-3 space-y-2 text-xs">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-emerald-900">
-                      <p className="font-medium flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-                        Dadri Mandi Queue Update
-                      </p>
-                      <p className="mt-1 text-slate-600">
-                        Token {activeBooking.token} is at Queue Position {activeBooking.queuePosition}. Estimated waiting time: {activeBooking.predictedWaitMinutes} mins.
-                      </p>
-                    </div>
+                    {activeBooking ? (
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 text-emerald-900">
+                        <p className="font-medium flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+                          {activeBooking.centreName || 'Dadri Mandi'} Queue Update
+                        </p>
+                        <p className="mt-1 text-slate-600">
+                          Token {activeBooking.token} is at Queue Position #{activeBooking.queuePosition}. Estimated wait: {activeBooking.predictedWaitMinutes} mins.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-600 text-center">
+                        <p className="font-medium">No Active Appointments</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">Book a slot to reserve your mandi queue token.</p>
+                      </div>
+                    )}
 
                     {alertNotification && (
                       <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-amber-900">
@@ -216,13 +226,6 @@ export const Navbar = () => {
                         <p className="mt-1 text-slate-600">{alertNotification}</p>
                       </div>
                     )}
-
-                    <div className="bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-slate-700">
-                      <p className="font-medium">Simulated DBT Payment (Demo Data)</p>
-                      <p className="mt-0.5 text-slate-500 text-[11px]">
-                        Simulated payment of ₹5,687.50 will disburse to linked demo bank account upon weighbridge signoff.
-                      </p>
-                    </div>
                   </div>
                   <div className="px-4 pt-2 border-t border-slate-100 flex justify-between items-center text-xs">
                     <Link
@@ -254,14 +257,37 @@ export const Navbar = () => {
               Book a Slot
             </Link>
 
-            {/* Login / Profile CTA */}
-            <Link
-              to="/login"
-              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg text-slate-700 hover:bg-slate-100 border border-slate-200 transition"
-            >
-              <User className="w-4 h-4 text-slate-500" />
-              <span className="hidden md:inline">Portal Login</span>
-            </Link>
+            {/* Dynamic User Profile / Login CTA */}
+            {farmerProfile ? (
+              <div className="flex items-center gap-1 sm:gap-2">
+                <Link
+                  to="/farmer"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs font-bold text-emerald-800 hover:bg-emerald-100 transition"
+                  title="Farmer Portal"
+                >
+                  <User className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="max-w-[100px] sm:max-w-[130px] truncate">{farmerProfile.name}</span>
+                </Link>
+                <button
+                  onClick={() => {
+                    logout();
+                    navigate('/login');
+                  }}
+                  className="px-2 py-1.5 text-xs font-semibold rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 transition"
+                  title="Sign Out"
+                >
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg text-slate-700 hover:bg-slate-100 border border-slate-200 transition"
+              >
+                <User className="w-4 h-4 text-slate-500" />
+                <span className="hidden md:inline">Portal Login</span>
+              </Link>
+            )}
 
             {/* Mobile Hamburger Toggle */}
             <button

@@ -12,12 +12,12 @@ import {
   UserPlus,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { checkPhoneExists, getFarmerProfileByPhone } from '../../services/kisanFlowService';
+import { checkPhoneExists, getFarmerProfileByPhone, registerFarmer } from '../../services/kisanFlowService';
 import { isSMSProviderConfigured } from '../../services/notificationService';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { setUserRole, setFarmerProfile } = useApp();
+  const { setUserRole, loginFarmer } = useApp();
   const [selectedTab, setSelectedTab] = useState('farmer'); // 'farmer', 'operator', 'admin'
   const [phone, setPhone] = useState('9876543210');
   const [otp, setOtp] = useState('123456');
@@ -26,11 +26,19 @@ export const LoginPage = () => {
 
   const isRealSMS = isSMSProviderConfigured();
 
-  const handleQuickLogin = (role) => {
+  const handleQuickLogin = async (role) => {
     setUserRole(role);
-    if (role === 'farmer') navigate('/farmer');
-    else if (role === 'operator') navigate('/operator');
-    else if (role === 'admin') navigate('/admin');
+    if (role === 'farmer') {
+      const profile = await getFarmerProfileByPhone('9876543210');
+      if (profile) {
+        await loginFarmer(profile);
+      }
+      navigate('/farmer');
+    } else if (role === 'operator') {
+      navigate('/operator');
+    } else if (role === 'admin') {
+      navigate('/admin');
+    }
   };
 
   const handleFormSubmit = async (e) => {
@@ -38,7 +46,7 @@ export const LoginPage = () => {
     setErrorMsg('');
 
     if (selectedTab === 'farmer') {
-      const cleanPhone = phone.trim().replace(/\D/g, '');
+      const cleanPhone = phone.trim().replace(/\D/g, '').slice(-10);
       if (cleanPhone.length !== 10) {
         setErrorMsg('Please enter a valid 10-digit mobile number.');
         return;
@@ -46,15 +54,22 @@ export const LoginPage = () => {
 
       setLoading(true);
       try {
-        const existingProfile = await getFarmerProfileByPhone(`+91 ${cleanPhone}`);
-        if (existingProfile) {
-          setFarmerProfile(existingProfile);
+        let profile = await getFarmerProfileByPhone(cleanPhone);
+        if (!profile) {
+          // Existing phone number -> existing profile
+          // New phone number -> new profile
+          profile = await registerFarmer({
+            name: `Farmer ${cleanPhone.slice(-4)}`,
+            phone: `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`,
+            village: 'Dadri Tehsil',
+            district: 'Gautam Buddha Nagar',
+          });
         }
-        setUserRole('farmer');
+        await loginFarmer(profile);
         navigate('/farmer');
       } catch (err) {
-        setUserRole('farmer');
-        navigate('/farmer');
+        console.error('Login error:', err);
+        setErrorMsg('Authentication error. Please try again.');
       } finally {
         setLoading(false);
       }

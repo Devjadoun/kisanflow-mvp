@@ -27,18 +27,28 @@ export const MyBookings = () => {
 
   useEffect(() => {
     async function load() {
+      setLoading(true);
       try {
-        const bookings = await getFarmerBookings();
-        setDbBookings(bookings || []);
-      } catch {}
-      setLoading(false);
+        const fId = farmerProfile?.farmerId || farmerProfile?.id;
+        if (fId || farmerProfile?.phone) {
+          const bookings = await getFarmerBookings(fId, farmerProfile?.phone);
+          setDbBookings(bookings || []);
+        } else {
+          setDbBookings([]);
+        }
+      } catch {
+        setDbBookings([]);
+      } finally {
+        setLoading(false);
+      }
     }
     load();
-  }, [activeBooking]);
+  }, [farmerProfile?.farmerId, farmerProfile?.id, farmerProfile?.phone, activeBooking]);
 
   // Combine active booking with database bookings, deduplicating by bookingId
   const allList = [];
-  if (activeBooking) {
+  const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
+  if (activeBooking && (!activeBooking.farmerId || !currentFarmerId || activeBooking.farmerId === currentFarmerId)) {
     allList.push({
       bookingId: activeBooking.bookingId,
       token: activeBooking.token,
