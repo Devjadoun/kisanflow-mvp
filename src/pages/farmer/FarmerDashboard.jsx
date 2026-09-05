@@ -25,12 +25,37 @@ export const FarmerDashboard = () => {
   const { activeBooking, farmerProfile, realtimeStatus, lastSyncTime } = useApp();
 
   const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
-  const isFarmerActiveBooking = activeBooking && (!activeBooking.farmerId || !currentFarmerId || activeBooking.farmerId === currentFarmerId);
+  const cleanPhone = farmerProfile?.phone ? farmerProfile.phone.replace(/\D/g, '').slice(-10) : null;
+  const farmerEmail = farmerProfile?.email ? farmerProfile.email.trim().toLowerCase() : null;
+
+  const isFarmerActiveBooking = Boolean(
+    activeBooking && farmerProfile && (
+      (currentFarmerId && activeBooking.farmerId === currentFarmerId) ||
+      (cleanPhone && (activeBooking.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (farmerEmail && (activeBooking.farmerEmail || '').toLowerCase() === farmerEmail)
+    )
+  );
   const currentBooking = isFarmerActiveBooking ? activeBooking : null;
 
   return (
     <div className="space-y-6 text-left">
       <SimulationNotice compact />
+
+      {/* Guest Notice */}
+      {!farmerProfile && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <span className="text-amber-800 font-semibold">
+            You are currently browsing as a Guest. Sign in with your Mobile Number or Email to view your active appointments and tokens.
+          </span>
+          <Link
+            to="/login"
+            className="px-3.5 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg transition shrink-0 inline-flex items-center gap-1 self-start sm:self-auto"
+          >
+            <span>Sign In to Portal</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
 
       {/* Live Sync Status Bar */}
       <div className="flex items-center justify-between text-xs px-1">
@@ -52,15 +77,15 @@ export const FarmerDashboard = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-              Aadhaar Verified Farmer
+              {farmerProfile ? 'Aadhaar Verified Farmer' : 'Guest Visitor'}
             </span>
-            <span className="text-xs text-slate-400">|</span>
+            <span className="text-slate-400">|</span>
             <span className="text-xs text-slate-500 font-mono">
-              Phone: {farmerProfile?.phone || 'Guest'}
+              {farmerProfile?.email ? `Email: ${farmerProfile.email}` : farmerProfile?.phone ? `Phone: ${farmerProfile.phone}` : 'Not Signed In'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-1">
-            Welcome, {farmerProfile?.name || 'Registered Farmer'}
+            Welcome, {farmerProfile?.name || 'Farmer'}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             {farmerProfile?.village || 'Dadri Tehsil'}, {farmerProfile?.district || 'Gautam Buddha Nagar'} • Registered for MSP Procurement

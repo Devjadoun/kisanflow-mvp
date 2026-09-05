@@ -2,7 +2,7 @@ import React from 'react';
 import { X, Printer, CheckCircle2, ShieldCheck, Download, Share2 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
-export const DigitalReceiptModal = ({ isOpen, onClose, booking }) => {
+export const DigitalReceiptModal = ({ isOpen, onClose, booking, farmer }) => {
   const { farmerProfile } = useApp();
 
   if (!isOpen) return null;
@@ -12,6 +12,7 @@ export const DigitalReceiptModal = ({ isOpen, onClose, booking }) => {
   };
 
   const b = booking;
+  const f = farmer || farmerProfile || {};
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
@@ -55,10 +56,10 @@ export const DigitalReceiptModal = ({ isOpen, onClose, booking }) => {
           <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
             <div>
               <span className="text-slate-400 block font-medium">Farmer Details</span>
-              <p className="font-bold text-slate-800 text-sm mt-0.5">{farmerProfile.name}</p>
-              <p className="text-slate-600">Aadhaar: {farmerProfile.aadhaar}</p>
-              <p className="text-slate-600">Mobile: {farmerProfile.phone}</p>
-              <p className="text-slate-600">Village: {farmerProfile.village}</p>
+              <p className="font-bold text-slate-800 text-sm mt-0.5">{f.name || b?.farmer || 'Registered Farmer'}</p>
+              <p className="text-slate-600">Aadhaar: {f.aadhaar || 'XXXX-XXXX-8291'}</p>
+              <p className="text-slate-600">Mobile: {f.phone || b?.farmerPhone || 'N/A'}</p>
+              <p className="text-slate-600">Village: {f.village || 'Dadri Tehsil'}</p>
             </div>
             <div>
               <span className="text-slate-400 block font-medium">Procurement Centre</span>

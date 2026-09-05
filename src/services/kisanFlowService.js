@@ -5,6 +5,7 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
+export { supabase, isSupabaseConfigured };
 import { COMMODITIES, PROCUREMENT_CENTRES } from '../data/mockData';
 import {
   recordEvent,
@@ -229,6 +230,7 @@ export const getFarmerProfileByPhone = async (phone) => {
           farmerId: farmer ? farmer.id : profile.id,
           name: profile.name,
           phone: profile.phone,
+          email: profile.email || null,
           role: profile.role,
           village: farmer?.village || 'Dhoom Manikpur, Dadri',
           district: farmer?.district || 'Gautam Buddha Nagar',
@@ -262,6 +264,185 @@ export const getFarmerProfileByPhone = async (phone) => {
   }
 
   return null;
+};
+
+/**
+ * 3b. getFarmerProfileByIdentifier
+ * Authenticates & resolves farmer identity from either Mobile Number or Email
+ */
+export const getFarmerProfileByIdentifier = async (identifier) => {
+  if (!identifier) return null;
+  const str = String(identifier).trim();
+
+  // If Email Address
+  if (str.includes('@')) {
+    const normEmail = str.toLowerCase();
+
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        let { data: profile } = await supabase
+          .from('profiles')
+          .select('id, name, phone, role')
+          .eq('phone', normEmail)
+          .limit(1)
+          .maybeSingle();
+
+        if (!profile) {
+          const { data: allProfiles } = await supabase.from('profiles').select('id, name, phone, role');
+          if (allProfiles) {
+            profile = allProfiles.find(p => (p.phone || '').toLowerCase() === normEmail || (p.email || '').toLowerCase() === normEmail);
+          }
+        }
+
+        if (profile) {
+          const { data: farmer } = await supabase
+            .from('farmers')
+            .select('*')
+            .eq('profile_id', profile.id)
+            .maybeSingle();
+
+          return {
+            id: profile.id,
+            profileId: profile.id,
+            farmerId: farmer ? farmer.id : profile.id,
+            name: profile.name,
+            phone: profile.phone?.includes('@') ? null : profile.phone,
+            email: normEmail,
+            role: profile.role,
+            village: farmer?.village || 'Dadri Tehsil',
+            district: farmer?.district || 'Gautam Buddha Nagar',
+            state: 'Uttar Pradesh',
+            preferredLanguage: 'Hindi / English',
+            points: 0,
+          };
+        }
+      } catch {}
+    }
+
+    // Check local storage registry
+    const localProfiles = getLocal(LOCAL_STORAGE_KEYS.PROFILES, []);
+    const found = localProfiles.find(p => (p.email || '').toLowerCase() === normEmail || (p.phone || '').toLowerCase() === normEmail);
+    if (found) {
+      return {
+        ...found,
+        profileId: found.id || found.profileId,
+        farmerId: found.farmerId || found.id,
+        email: normEmail,
+      };
+    }
+
+    const activeProfile = getLocal(LOCAL_STORAGE_KEYS.FARMER_PROFILE, null);
+    if (activeProfile && ((activeProfile.email || '').toLowerCase() === normEmail || (activeProfile.phone || '').toLowerCase() === normEmail)) {
+      return {
+        ...activeProfile,
+        profileId: activeProfile.id || activeProfile.profileId,
+        farmerId: activeProfile.farmerId || activeProfile.id,
+        email: normEmail,
+      };
+    }
+
+    return null;
+  }
+
+  // Otherwise treat as 10-digit mobile number
+  return getFarmerProfileByPhone(str);
+};
+
+/**
+ * 3c. resolveOrCreateFarmerProfile
+ * Ensures exactly ONE account per identity without recreating or losing history.
+ */
+export const resolveOrCreateFarmerProfile = async ({ identifier, phone, email, name, authUser }) => {
+  const normEmail = email ? email.trim().toLowerCase() : (identifier && identifier.includes('@') ? identifier.trim().toLowerCase() : null);
+  const cleanPhone = phone ? phone.trim().replace(/\D/g, '').slice(-10) : (identifier && !identifier.includes('@') ? identifier.trim().replace(/\D/g, '').slice(-10) : null);
+
+  // 1. Check for existing legitimate profile
+  let existing = null;
+  if (normEmail) {
+    existing = await getFarmerProfileByIdentifier(normEmail);
+  } else if (cleanPhone) {
+    existing = await getFarmerProfileByIdentifier(cleanPhone);
+  }
+
+  if (existing) {
+    return existing;
+  }
+
+  // 2. Generate unique UUIDs for new identity
+  const genUuid = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  const profileId = authUser?.id || genUuid();
+  const farmerId = genUuid();
+  const formattedPhone = cleanPhone ? `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}` : null;
+  const displayName = name || authUser?.user_metadata?.name || (cleanPhone ? `Farmer (${cleanPhone.slice(-4)})` : normEmail?.split('@')[0]);
+
+  let createdProfile = {
+    id: profileId,
+    profileId: profileId,
+    farmerId: farmerId,
+    name: displayName,
+    phone: formattedPhone,
+    email: normEmail || null,
+    role: 'farmer',
+    village: 'Dadri Tehsil',
+    district: 'Gautam Buddha Nagar',
+    state: 'Uttar Pradesh',
+    preferredLanguage: 'Hindi / English',
+    points: 0,
+    created_at: new Date().toISOString(),
+  };
+
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data: pData, error: pErr } = await supabase
+        .from('profiles')
+        .insert([{
+          id: profileId,
+          name: displayName,
+          phone: formattedPhone || normEmail,
+          role: 'farmer',
+        }])
+        .select()
+        .single();
+
+      if (!pErr && pData) {
+        createdProfile.id = pData.id;
+        createdProfile.profileId = pData.id;
+
+        const { data: fData, error: fErr } = await supabase
+          .from('farmers')
+          .insert([{
+            id: farmerId,
+            profile_id: pData.id,
+            village: 'Dadri Tehsil',
+            district: 'Gautam Buddha Nagar',
+          }])
+          .select()
+          .single();
+
+        if (!fErr && fData) {
+          createdProfile.farmerId = fData.id;
+        }
+      }
+    } catch {}
+  }
+
+  // Persist locally
+  const profiles = getLocal(LOCAL_STORAGE_KEYS.PROFILES, []);
+  setLocal(LOCAL_STORAGE_KEYS.PROFILES, [createdProfile, ...profiles.filter(p => p.id !== createdProfile.id && p.phone !== createdProfile.phone && p.email !== createdProfile.email)]);
+  setLocal(LOCAL_STORAGE_KEYS.FARMER_PROFILE, createdProfile);
+  setLocal('kf_session_profile', createdProfile);
+
+  return createdProfile;
 };
 
 /**
@@ -310,6 +491,7 @@ export const createBooking = async (bookingData) => {
     bookingId,
     token,
     farmerId: bookingData.farmerId || null,
+    farmerEmail: bookingData.farmerEmail || null,
     centreId: selectedCentre.id,
     centreName: selectedCentre.name,
     commodityId: selectedCommodity.id,
@@ -346,11 +528,18 @@ export const createBooking = async (bookingData) => {
         total_estimated_amount: createdRecord.totalEstimatedAmount,
       };
 
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from('bookings')
         .insert([payload])
         .select()
         .single();
+
+      if (error && error.code === '23503') {
+        const fallbackPayload = { ...payload, farmer_id: null };
+        const res = await supabase.from('bookings').insert([fallbackPayload]).select().single();
+        data = res.data;
+        error = res.error;
+      }
 
       if (!error && data) {
         createdRecord.supabaseId = data.id;
@@ -485,8 +674,8 @@ export const getBooking = async (idOrToken) => {
  * 6b. getActiveBookingForFarmer
  * Fetches the active (uncompleted/uncancelled) booking strictly for the specified farmer.
  */
-export const getActiveBookingForFarmer = async (farmerId = null, farmerPhone = null) => {
-  if (!farmerId && !farmerPhone) return null;
+export const getActiveBookingForFarmer = async (farmerId = null, farmerPhone = null, farmerEmail = null) => {
+  if (!farmerId && !farmerPhone && !farmerEmail) return null;
 
   if (isSupabaseConfigured() && supabase && farmerId) {
     try {
@@ -536,12 +725,14 @@ export const getActiveBookingForFarmer = async (farmerId = null, farmerPhone = n
   }
 
   const cleanDigits = farmerPhone ? farmerPhone.replace(/\D/g, '').slice(-10) : null;
+  const normEmail = farmerEmail ? farmerEmail.trim().toLowerCase() : null;
   const allBookings = getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
   const active = allBookings.find(b => {
     const matchId = farmerId && b.farmerId === farmerId;
     const matchPhone = cleanDigits && (b.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanDigits;
+    const matchEmail = normEmail && (b.farmerEmail || '').toLowerCase() === normEmail;
     const isUnfinished = (b.status || '').toLowerCase() !== 'completed' && (b.status || '').toLowerCase() !== 'cancelled';
-    return (matchId || matchPhone) && isUnfinished;
+    return (matchId || matchPhone || matchEmail) && isUnfinished;
   });
 
   return active || null;
@@ -552,11 +743,13 @@ export const getActiveBookingForFarmer = async (farmerId = null, farmerPhone = n
  * Fetches all bookings strictly for the specified farmer.
  * DATA ISOLATION ENFORCEMENT: Never leaks records if unauthenticated or mismatched.
  */
-export const getFarmerBookings = async (farmerId = null, farmerPhone = null) => {
+export const getFarmerBookings = async (farmerId = null, farmerPhone = null, farmerEmail = null) => {
   // STRICT DATA ISOLATION: Unauthenticated or empty identity must NEVER leak records!
-  if (!farmerId && !farmerPhone) {
+  if (!farmerId && !farmerPhone && !farmerEmail) {
     return [];
   }
+
+  let results = [];
 
   if (isSupabaseConfigured() && supabase && farmerId) {
     try {
@@ -566,8 +759,8 @@ export const getFarmerBookings = async (farmerId = null, farmerPhone = null) => 
         .eq('farmer_id', farmerId)
         .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        return data.map(d => {
+      if (!error && data && data.length > 0) {
+        results = data.map(d => {
           const comm = COMMODITIES.find(c => c.id === d.commodity_id) || COMMODITIES[0];
           const centre = PROCUREMENT_CENTRES.find(c => c.id === d.centre_id) || PROCUREMENT_CENTRES[0];
           return {
@@ -593,14 +786,24 @@ export const getFarmerBookings = async (farmerId = null, farmerPhone = null) => 
     } catch {}
   }
 
-  // Local storage strict fallback
+  // Local storage strict matching (merged & deduplicated)
   const cleanDigits = farmerPhone ? farmerPhone.replace(/\D/g, '').slice(-10) : null;
+  const normEmail = farmerEmail ? farmerEmail.trim().toLowerCase() : null;
   const localBookings = getLocal(LOCAL_STORAGE_KEYS.BOOKINGS, []);
-  return localBookings.filter(b => {
+  const matchingLocal = localBookings.filter(b => {
     const matchId = farmerId && b.farmerId === farmerId;
     const matchPhone = cleanDigits && (b.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanDigits;
-    return matchId || matchPhone;
+    const matchEmail = normEmail && (b.farmerEmail || '').toLowerCase() === normEmail;
+    return matchId || matchPhone || matchEmail;
   });
+
+  matchingLocal.forEach(loc => {
+    if (!results.some(r => r.bookingId === loc.bookingId || r.token === loc.token)) {
+      results.push(loc);
+    }
+  });
+
+  return results;
 };
 
 /**

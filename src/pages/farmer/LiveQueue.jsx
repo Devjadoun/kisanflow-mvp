@@ -18,7 +18,20 @@ import { useApp } from '../../context/AppContext';
 import { SimulationNotice } from '../../components/common/SimulationNotice';
 
 export const LiveQueue = () => {
-  const { activeBooking, queueList, advanceQueue, realtimeStatus, lastSyncTime } = useApp();
+  const { activeBooking, farmerProfile, queueList, advanceQueue, realtimeStatus, lastSyncTime } = useApp();
+
+  const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
+  const cleanPhone = farmerProfile?.phone ? farmerProfile.phone.replace(/\D/g, '').slice(-10) : null;
+  const farmerEmail = farmerProfile?.email ? farmerProfile.email.trim().toLowerCase() : null;
+
+  const isFarmerActiveBooking = Boolean(
+    activeBooking && farmerProfile && (
+      (currentFarmerId && activeBooking.farmerId === currentFarmerId) ||
+      (cleanPhone && (activeBooking.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (farmerEmail && (activeBooking.farmerEmail || '').toLowerCase() === farmerEmail)
+    )
+  );
+  const myBooking = isFarmerActiveBooking ? activeBooking : null;
 
   // Active serving token
   const currentToken = queueList.find(q => q.status === 'Called' || q.status === 'Current' || q.status === 'Processing') || queueList[0];
@@ -54,28 +67,18 @@ export const LiveQueue = () => {
           <div className="flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping"></span>
             <h1 className="text-xl sm:text-2xl font-black uppercase tracking-wider text-white">
-              {activeBooking?.centreName || 'Dadri Mandi Samiti Intake'}
+              {myBooking?.centreName || 'Dadri Mandi Samiti Intake'}
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-mono">
-              Gate #01 Weighbridge
+            <span className="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full font-mono font-semibold">
+              Live Queue Status
             </span>
-            {queueList.length > 0 && (
-              <button
-                onClick={advanceQueue}
-                className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3 py-1 rounded-lg transition flex items-center gap-1"
-                title="Advance Queue Token"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span>Call Next Token</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* 4 Big Metric Blocks */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 pt-6 text-center">
+        {/* 4 Large Highlight Numbers */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
           {/* CURRENTLY SERVING */}
           <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700">
             <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400 block">
@@ -95,10 +98,10 @@ export const LiveQueue = () => {
               YOUR TOKEN
             </span>
             <span className="text-3xl sm:text-4xl font-black text-white font-mono mt-1 block">
-              {activeBooking ? activeBooking.token : 'None'}
+              {myBooking ? myBooking.token : 'None'}
             </span>
             <span className="text-[10px] text-emerald-400 mt-1 block font-semibold">
-              {activeBooking ? `${activeBooking.commodityName?.split(' ')[0]} • ${activeBooking.quantityKg} kg` : 'No booking'}
+              {myBooking ? `${myBooking.commodityName?.split(' ')[0]} • ${myBooking.quantityKg} kg` : 'No booking'}
             </span>
           </div>
 
@@ -108,10 +111,10 @@ export const LiveQueue = () => {
               QUEUE POSITION
             </span>
             <span className="text-3xl sm:text-4xl font-black text-white font-mono mt-1 block">
-              {activeBooking ? `#${activeBooking.queuePosition}` : 'N/A'}
+              {myBooking ? `#${myBooking.queuePosition}` : 'N/A'}
             </span>
             <span className="text-[10px] text-slate-400 mt-1 block">
-              {activeBooking ? `${Math.max(0, activeBooking.queuePosition - 1)} Ahead` : 'Empty Queue'}
+              {myBooking ? `${Math.max(0, myBooking.queuePosition - 1)} Ahead` : 'Empty Queue'}
             </span>
           </div>
 
@@ -121,7 +124,7 @@ export const LiveQueue = () => {
               ESTIMATED WAIT
             </span>
             <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono mt-1 block">
-              {activeBooking ? `${activeBooking.predictedWaitMinutes} min` : '0 min'}
+              {myBooking ? `${myBooking.predictedWaitMinutes} min` : '0 min'}
             </span>
             <span className="text-[10px] text-slate-400 mt-1 block">MVP dynamic speed</span>
           </div>
@@ -177,7 +180,7 @@ export const LiveQueue = () => {
         ) : (
           <div className="divide-y divide-slate-100">
             {queueList.map((item, idx) => {
-              const isUser = item.isUser || (activeBooking && activeBooking.token === item.token);
+              const isUser = Boolean(myBooking && myBooking.token === item.token);
               const isCalled = item.status === 'Called' || item.status === 'YOU (Called!)';
               const isCompleted = item.status === 'Completed';
 

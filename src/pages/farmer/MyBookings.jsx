@@ -30,8 +30,8 @@ export const MyBookings = () => {
       setLoading(true);
       try {
         const fId = farmerProfile?.farmerId || farmerProfile?.id;
-        if (fId || farmerProfile?.phone) {
-          const bookings = await getFarmerBookings(fId, farmerProfile?.phone);
+        if (fId || farmerProfile?.phone || farmerProfile?.email) {
+          const bookings = await getFarmerBookings(fId, farmerProfile?.phone, farmerProfile?.email);
           setDbBookings(bookings || []);
         } else {
           setDbBookings([]);
@@ -43,12 +43,23 @@ export const MyBookings = () => {
       }
     }
     load();
-  }, [farmerProfile?.farmerId, farmerProfile?.id, farmerProfile?.phone, activeBooking]);
+  }, [farmerProfile?.farmerId, farmerProfile?.id, farmerProfile?.phone, farmerProfile?.email, activeBooking]);
 
   // Combine active booking with database bookings, deduplicating by bookingId
   const allList = [];
   const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
-  if (activeBooking && (!activeBooking.farmerId || !currentFarmerId || activeBooking.farmerId === currentFarmerId)) {
+  const cleanPhone = farmerProfile?.phone ? farmerProfile.phone.replace(/\D/g, '').slice(-10) : null;
+  const farmerEmail = farmerProfile?.email ? farmerProfile.email.trim().toLowerCase() : null;
+
+  const isFarmerActiveBooking = Boolean(
+    activeBooking && farmerProfile && (
+      (currentFarmerId && activeBooking.farmerId === currentFarmerId) ||
+      (cleanPhone && (activeBooking.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (farmerEmail && (activeBooking.farmerEmail || '').toLowerCase() === farmerEmail)
+    )
+  );
+
+  if (isFarmerActiveBooking) {
     allList.push({
       bookingId: activeBooking.bookingId,
       token: activeBooking.token,

@@ -23,7 +23,20 @@ export const PaymentReceipt = () => {
   const { activeBooking, farmerProfile } = useApp();
   const [showReceiptModal, setShowReceiptModal] = useState(false);
 
-  if (!activeBooking) {
+  const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
+  const cleanPhone = farmerProfile?.phone ? farmerProfile.phone.replace(/\D/g, '').slice(-10) : null;
+  const farmerEmail = farmerProfile?.email ? farmerProfile.email.trim().toLowerCase() : null;
+
+  const isFarmerActiveBooking = Boolean(
+    activeBooking && farmerProfile && (
+      (currentFarmerId && activeBooking.farmerId === currentFarmerId) ||
+      (cleanPhone && (activeBooking.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (farmerEmail && (activeBooking.farmerEmail || '').toLowerCase() === farmerEmail)
+    )
+  );
+  const myBooking = isFarmerActiveBooking ? activeBooking : null;
+
+  if (!myBooking) {
     return (
       <div className="max-w-2xl mx-auto space-y-6 text-left py-6 pb-12">
         <SimulationNotice
@@ -50,7 +63,7 @@ export const PaymentReceipt = () => {
     );
   }
 
-  const isCompleted = (activeBooking.status || '').toLowerCase() === 'completed';
+  const isCompleted = (myBooking.status || '').toLowerCase() === 'completed';
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 text-left py-6 pb-12">
@@ -86,7 +99,7 @@ export const PaymentReceipt = () => {
               Net Simulated DBT Settlement
             </span>
             <div className="text-4xl sm:text-5xl font-black text-white mt-1 font-mono">
-              ₹{activeBooking.totalEstimatedAmount ? activeBooking.totalEstimatedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+              ₹{myBooking.totalEstimatedAmount ? myBooking.totalEstimatedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
             </div>
             <p className="text-xs text-slate-400 mt-1">Simulated Direct Benefit Transfer (DBT)</p>
           </div>
@@ -97,7 +110,7 @@ export const PaymentReceipt = () => {
               <CheckCircle2 className="w-3.5 h-3.5" /> {isCompleted ? 'Disbursed (Simulated)' : 'Pending Weighment'}
             </span>
             <span className="text-[11px] text-slate-400 block mt-1 font-mono">
-              Token: {activeBooking.token}
+              Token: {myBooking.token}
             </span>
           </div>
         </div>
@@ -106,27 +119,27 @@ export const PaymentReceipt = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-left p-5 bg-slate-50 rounded-2xl border border-slate-100 text-xs">
           <div>
             <span className="text-slate-400 block font-medium">Transaction Reference:</span>
-            <strong className="font-mono text-slate-900 text-xs block mt-0.5">{activeBooking.transactionId || 'KF-PAY-DEMO'}</strong>
+            <strong className="font-mono text-slate-900 text-xs block mt-0.5">{myBooking.transactionId || 'KF-PAY-DEMO'}</strong>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Commodity:</span>
-            <strong className="text-slate-900 block mt-0.5">{activeBooking.commodityName || 'Wheat'}</strong>
+            <strong className="text-slate-900 block mt-0.5">{myBooking.commodityName || 'Wheat'}</strong>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Net Weight:</span>
-            <strong className="text-slate-900 block mt-0.5">{activeBooking.quantityKg || 0} kg</strong>
+            <strong className="text-slate-900 block mt-0.5">{myBooking.quantityKg || 0} kg</strong>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Rate / Quintal:</span>
-            <strong className="text-emerald-700 block mt-0.5">₹{activeBooking.ratePerQuintal || 2275}</strong>
+            <strong className="text-emerald-700 block mt-0.5">₹{myBooking.ratePerQuintal || 2275}</strong>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Procurement Centre:</span>
-            <strong className="text-slate-900 block mt-0.5 truncate">{activeBooking.centreName || 'Dadri Centre'}</strong>
+            <strong className="text-slate-900 block mt-0.5 truncate">{myBooking.centreName || 'Dadri Centre'}</strong>
           </div>
 
           <div>
@@ -158,7 +171,7 @@ export const PaymentReceipt = () => {
       {/* Digital Receipt Modal (if triggered) */}
       {showReceiptModal && (
         <DigitalReceiptModal
-          booking={activeBooking}
+          booking={myBooking}
           farmer={farmerProfile}
           onClose={() => setShowReceiptModal(false)}
         />

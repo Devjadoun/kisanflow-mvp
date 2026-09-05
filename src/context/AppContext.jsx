@@ -55,7 +55,7 @@ const AppContext = createContext();
 export const AppProvider = ({ children }) => {
   const [userRole, setUserRole] = useState(() => loadStorage('kf_userRole', 'farmer'));
   const [activeBooking, setActiveBooking] = useState(() => loadStorage('kf_activeBooking', null));
-  const [farmerProfile, setFarmerProfile] = useState(() => loadStorage('kf_session_profile', DEFAULT_FARMER_PROFILE));
+  const [farmerProfile, setFarmerProfile] = useState(() => loadStorage('kf_session_profile', null));
   const [queueList, setQueueList] = useState(() => loadStorage('kf_queueList', []));
   const [operatorBookings, setOperatorBookings] = useState(() => loadStorage('kf_operatorBookings', []));
   const [rewardsCatalog, setRewardsCatalog] = useState(() => loadStorage('kf_rewardsCatalog', REWARDS_CATALOG));
@@ -105,8 +105,8 @@ export const AppProvider = ({ children }) => {
     let isCancelled = false;
     async function syncActiveBooking() {
       const fId = farmerProfile?.farmerId || farmerProfile?.id;
-      if (fId) {
-        const active = await kisanFlowService.getActiveBookingForFarmer(fId, farmerProfile?.phone);
+      if (fId || farmerProfile?.phone || farmerProfile?.email) {
+        const active = await kisanFlowService.getActiveBookingForFarmer(fId, farmerProfile?.phone, farmerProfile?.email);
         if (!isCancelled) {
           setActiveBooking(active);
         }
@@ -116,7 +116,7 @@ export const AppProvider = ({ children }) => {
     }
     syncActiveBooking();
     return () => { isCancelled = true; };
-  }, [farmerProfile?.farmerId, farmerProfile?.id]);
+  }, [farmerProfile?.farmerId, farmerProfile?.id, farmerProfile?.phone, farmerProfile?.email]);
 
   // Authenticate Farmer Session
   const loginFarmer = async (profile) => {
@@ -128,9 +128,9 @@ export const AppProvider = ({ children }) => {
     } catch {}
 
     const fId = profile?.farmerId || profile?.id;
-    if (fId) {
+    if (fId || profile?.phone || profile?.email) {
       try {
-        const active = await kisanFlowService.getActiveBookingForFarmer(fId, profile.phone);
+        const active = await kisanFlowService.getActiveBookingForFarmer(fId, profile?.phone, profile?.email);
         setActiveBooking(active);
       } catch {
         setActiveBooking(null);
@@ -141,7 +141,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // Sign out and clear active farmer session
-  const logout = () => {
+  const logout = async () => {
     setFarmerProfile(null);
     setActiveBooking(null);
     setUserRole('farmer');
@@ -150,6 +150,11 @@ export const AppProvider = ({ children }) => {
       localStorage.removeItem('kf_activeBooking');
       localStorage.removeItem('kf_farmerProfile');
     } catch {}
+    if (kisanFlowService.supabase?.auth) {
+      try {
+        await kisanFlowService.supabase.auth.signOut();
+      } catch {}
+    }
   };
 
   // Initial data load from PostgreSQL
@@ -297,7 +302,8 @@ export const AppProvider = ({ children }) => {
       token,
       farmerId: farmerProfile?.farmerId || farmerProfile?.id || null,
       farmerName: farmerProfile?.name || 'Registered Farmer',
-      farmerPhone: farmerProfile?.phone || '+91 98765 43210',
+      farmerPhone: farmerProfile?.phone || null,
+      farmerEmail: farmerProfile?.email || null,
       centreName: selectedCentre.name,
       commodityName: selectedCommodity.name,
       queuePosition: queueList.length + 1,
@@ -309,10 +315,10 @@ export const AppProvider = ({ children }) => {
 
     // Add reward bonus if optimal slot selected
     const pointBonus = bookingData.isRecommended ? 50 : 20;
-    setFarmerProfile(prev => ({
+    setFarmerProfile(prev => prev ? ({
       ...prev,
-      points: prev.points + pointBonus,
-    }));
+      points: (prev.points || 0) + pointBonus,
+    }) : null);
 
     setRewardsHistory(prev => [
       {
@@ -327,7 +333,7 @@ export const AppProvider = ({ children }) => {
     // Insert into live queue list
     const newQueueItem = {
       token: newBooking.token,
-      farmer: farmerProfile.name,
+      farmer: farmerProfile?.name || 'Registered Farmer',
       commodity: selectedCommodity.name.split(' ')[0],
       qty: `${bookingData.quantityKg} kg`,
       status: 'YOU',
@@ -409,10 +415,10 @@ export const AppProvider = ({ children }) => {
 
   // Farmer Action: Submit Feedback
   const submitFeedback = (feedback) => {
-    setFarmerProfile(prev => ({
+    setFarmerProfile(prev => prev ? ({
       ...prev,
-      points: prev.points + 25,
-    }));
+      points: (prev.points || 0) + 25,
+    }) : null);
     setRewardsHistory(prev => [
       {
         id: `act-${Date.now()}`,
@@ -431,14 +437,14 @@ export const AppProvider = ({ children }) => {
   const claimReward = (rewardId) => {
     const reward = rewardsCatalog.find(r => r.id === rewardId);
     if (!reward || reward.claimed) return { success: false, msg: 'Already claimed' };
-    if (farmerProfile.points < reward.costPoints) {
+    if ((farmerProfile?.points || 0) < reward.costPoints) {
       return { success: false, msg: 'Insufficient points' };
     }
 
-    setFarmerProfile(prev => ({
+    setFarmerProfile(prev => prev ? ({
       ...prev,
-      points: prev.points - reward.costPoints,
-    }));
+      points: (prev.points || 0) - reward.costPoints,
+    }) : null);
 
     setRewardsCatalog(prev =>
       prev.map(r => (r.id === rewardId ? { ...r, claimed: true } : r))

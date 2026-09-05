@@ -20,7 +20,20 @@ import { SimulationNotice } from '../../components/common/SimulationNotice';
 export const ProcurementStatus = () => {
   const { activeBooking, farmerProfile } = useApp();
 
-  if (!activeBooking) {
+  const currentFarmerId = farmerProfile?.farmerId || farmerProfile?.id;
+  const cleanPhone = farmerProfile?.phone ? farmerProfile.phone.replace(/\D/g, '').slice(-10) : null;
+  const farmerEmail = farmerProfile?.email ? farmerProfile.email.trim().toLowerCase() : null;
+
+  const isFarmerActiveBooking = Boolean(
+    activeBooking && farmerProfile && (
+      (currentFarmerId && activeBooking.farmerId === currentFarmerId) ||
+      (cleanPhone && (activeBooking.farmerPhone || '').replace(/\D/g, '').slice(-10) === cleanPhone) ||
+      (farmerEmail && (activeBooking.farmerEmail || '').toLowerCase() === farmerEmail)
+    )
+  );
+  const myBooking = isFarmerActiveBooking ? activeBooking : null;
+
+  if (!myBooking) {
     return (
       <div className="max-w-3xl mx-auto space-y-6 text-left pb-12">
         <SimulationNotice
@@ -47,14 +60,14 @@ export const ProcurementStatus = () => {
     );
   }
 
-  const isCompleted = (activeBooking.status || '').toLowerCase() === 'completed';
-  const isProcessing = (activeBooking.status || '').toLowerCase() === 'processing';
+  const isCompleted = (myBooking.status || '').toLowerCase() === 'completed';
+  const isProcessing = (myBooking.status || '').toLowerCase() === 'processing';
 
   // Status timeline steps
   const timelineSteps = [
-    { title: 'Booking', status: 'completed', desc: `Online slot confirmed for ${activeBooking.timeSlot || '11:00 AM'}` },
+    { title: 'Booking', status: 'completed', desc: `Online slot confirmed for ${myBooking.timeSlot || '11:00 AM'}` },
     { title: 'Arrival', status: isProcessing || isCompleted ? 'completed' : 'active', desc: 'Gate entry verified via token registration' },
-    { title: 'Queue', status: isProcessing || isCompleted ? 'completed' : 'active', desc: `Token ${activeBooking.token} assigned in Mandi queue` },
+    { title: 'Queue', status: isProcessing || isCompleted ? 'completed' : 'active', desc: `Token ${myBooking.token} assigned in Mandi queue` },
     { title: 'Verification', status: isProcessing || isCompleted ? 'completed' : 'pending', desc: 'Aadhaar & Land Record validation' },
     { title: 'Weighing', status: isCompleted ? 'completed' : isProcessing ? 'active' : 'pending', desc: 'Electronic weighbridge gross & tare check' },
     { title: 'Procurement', status: isCompleted ? 'completed' : 'pending', desc: 'Quality grading & Mandi Samiti signoff' },
@@ -80,13 +93,13 @@ export const ProcurementStatus = () => {
               Procurement Lifecycle Tracker
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              {activeBooking.centreName || 'Dadri Procurement Centre'} • Counter #01
+              {myBooking.centreName || 'Dadri Procurement Centre'} • Counter #01
             </p>
           </div>
 
           <div className="text-left sm:text-right bg-slate-900 text-white p-4 rounded-xl">
             <span className="text-[10px] uppercase tracking-widest text-emerald-400 block font-mono">Token</span>
-            <span className="text-3xl font-black font-mono">{activeBooking.token}</span>
+            <span className="text-3xl font-black font-mono">{myBooking.token}</span>
           </div>
         </div>
 
@@ -100,20 +113,20 @@ export const ProcurementStatus = () => {
 
           <div>
             <span className="text-slate-400 block font-medium">Commodity:</span>
-            <strong className="text-slate-900 text-sm block mt-0.5">{activeBooking.commodityName}</strong>
-            <span className="text-[10px] text-emerald-700 font-semibold">MSP: ₹{activeBooking.ratePerQuintal} / q</span>
+            <strong className="text-slate-900 text-sm block mt-0.5">{myBooking.commodityName}</strong>
+            <span className="text-[10px] text-emerald-700 font-semibold">MSP: ₹{myBooking.ratePerQuintal} / q</span>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Quantity:</span>
-            <strong className="text-emerald-700 text-sm block mt-0.5">{activeBooking.quantityKg} kg</strong>
-            <span className="text-[10px] text-slate-500 font-mono">₹{activeBooking.totalEstimatedAmount?.toLocaleString()}</span>
+            <strong className="text-emerald-700 text-sm block mt-0.5">{myBooking.quantityKg} kg</strong>
+            <span className="text-[10px] text-slate-500 font-mono">₹{myBooking.totalEstimatedAmount?.toLocaleString()}</span>
           </div>
 
           <div>
             <span className="text-slate-400 block font-medium">Token:</span>
-            <strong className="font-mono text-slate-900 text-sm block mt-0.5">{activeBooking.token}</strong>
-            <span className="text-[10px] text-slate-500">Slot: {activeBooking.timeSlot}</span>
+            <strong className="font-mono text-slate-900 text-sm block mt-0.5">{myBooking.token}</strong>
+            <span className="text-[10px] text-slate-500">Slot: {myBooking.timeSlot}</span>
           </div>
         </div>
 
