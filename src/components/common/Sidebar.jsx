@@ -18,6 +18,7 @@ import {
   BarChart3,
   Scale,
   ShieldCheck,
+  Database,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -30,10 +31,20 @@ export const Sidebar = ({ role = 'farmer' }) => {
     { to: '/farmer/book-slot', label: 'Book Slot', icon: CalendarPlus },
     { to: '/farmer/ai-recommendation', label: 'AI Slot Engine', icon: Sparkles, badge: 'Smart' },
     { to: '/farmer/bookings', label: 'My Bookings', icon: CalendarDays },
-    { to: '/farmer/live-queue', label: 'Live Queue', icon: Users, badge: `Pos #${activeBooking.queuePosition}` },
+    {
+      to: '/farmer/live-queue',
+      label: 'Live Queue',
+      icon: Users,
+      badge: activeBooking?.queuePosition ? `Pos #${activeBooking.queuePosition}` : null,
+    },
     { to: '/farmer/procurement', label: 'Procurement Status', icon: Activity },
     { to: '/farmer/payment', label: 'Payment & Receipt', icon: Receipt },
-    { to: '/farmer/rewards', label: 'Kisan Rewards', icon: Award, badge: `${farmerProfile.points} pts` },
+    {
+      to: '/farmer/rewards',
+      label: 'Kisan Rewards',
+      icon: Award,
+      badge: `${farmerProfile?.points || 0} pts`,
+    },
     { to: '/farmer/feedback', label: 'Feedback', icon: MessageSquare },
     { to: '/farmer/profile', label: 'Farmer Profile', icon: UserCheck },
   ];
@@ -49,7 +60,9 @@ export const Sidebar = ({ role = 'farmer' }) => {
     { to: '/admin', label: 'Admin Overview', icon: LayoutDashboard, exact: true },
     { to: '/admin/centres', label: 'Centre Performance', icon: Building2 },
     { to: '/admin/analytics', label: 'Analytics & Trends', icon: BarChart3 },
-    { to: '/admin/predictions', label: 'AI & Predictive Engine', icon: Cpu, badge: 'ML Proto' },
+    { to: '/admin/predictions', label: 'AI & Predictive Engine', icon: Cpu, badge: 'MVP' },
+    { to: '/admin/storage', label: 'Data & Storage View', icon: Database, badge: 'Postgres' },
+    { to: '/admin/health', label: 'System Health & Audit', icon: Activity },
   ];
 
   const currentNav = role === 'operator' ? operatorNav : role === 'admin' ? adminNav : farmerNav;
@@ -69,14 +82,14 @@ export const Sidebar = ({ role = 'farmer' }) => {
               ? 'Dadri Procurement Incharge'
               : role === 'admin'
               ? 'Govt of UP - Agri Portal'
-              : farmerProfile.name}
+              : farmerProfile?.name || 'Registered Farmer'}
           </p>
           <p className="text-xs text-slate-500 truncate">
             {role === 'operator'
               ? 'Counter #01 - Weighbridge'
               : role === 'admin'
               ? 'State Agriculture Directorate'
-              : `${farmerProfile.village}`}
+              : farmerProfile?.village || 'Dadri Tehsil'}
           </p>
         </div>
 

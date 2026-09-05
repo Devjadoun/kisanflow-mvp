@@ -17,7 +17,22 @@ import { SimulationNotice } from '../../components/common/SimulationNotice';
 export const FarmerProfile = () => {
   const { farmerProfile, setFarmerProfile } = useApp();
   const [saved, setSaved] = useState(false);
-  const [profileData, setProfileData] = useState(farmerProfile);
+  const [profileData, setProfileData] = useState(() => farmerProfile || {
+    name: 'Registered Farmer',
+    phone: '+91 98765 43210',
+    aadhaar: 'XXXX-XXXX-8291',
+    kccNumber: 'KCC-UP-DAD-4891',
+    landHolding: '4.5 Acres (Wheat / Paddy)',
+    village: 'Dadri Tehsil',
+    district: 'Gautam Buddha Nagar',
+    state: 'Uttar Pradesh',
+    bankAccount: 'Bank of Baroda (A/C •••• 4921)',
+    ifsc: 'BARB0DADRIX',
+    preferredLanguage: 'Hindi / English',
+    smsAlerts: true,
+    whatsappAlerts: false,
+    points: 0,
+  });
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -40,11 +55,12 @@ export const FarmerProfile = () => {
       {/* Header Profile Summary */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-emerald-700 text-white flex items-center justify-center text-2xl font-black shrink-0">
-          {profileData.name.charAt(0)}
+          {(profileData?.name || 'F').charAt(0)}
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-black text-slate-900">{profileData.name}</h1>
+            <h1 className="text-xl font-black text-slate-900">{profileData?.name || 'Registered Farmer'}</h1>
+
             <span className="text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full flex items-center gap-1">
               <ShieldCheck className="w-3 h-3 text-emerald-700" /> Verified Producer
             </span>

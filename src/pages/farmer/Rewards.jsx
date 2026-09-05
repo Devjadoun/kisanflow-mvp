@@ -18,6 +18,8 @@ export const Rewards = () => {
   const { farmerProfile, rewardsCatalog, rewardsHistory, claimReward } = useApp();
   const [claimToast, setClaimToast] = useState(null);
 
+  const points = farmerProfile?.points || 0;
+
   const handleRedeem = (reward) => {
     const result = claimReward(reward.id);
     if (result.success) {
@@ -44,7 +46,7 @@ export const Rewards = () => {
         </div>
       )}
 
-      {/* Header (Exact Prompt Specification: KISAN REWARDS, Current Points: 1,250) */}
+      {/* Header */}
       <div className="bg-gradient-to-br from-purple-800 via-indigo-900 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/15">
           <div>
@@ -66,22 +68,21 @@ export const Rewards = () => {
               Current Points:
             </span>
             <div className="text-4xl sm:text-5xl font-black text-amber-300 font-mono mt-0.5">
-              {farmerProfile.points.toLocaleString()}
+              {points.toLocaleString()}
             </div>
             <span className="text-[11px] text-purple-200 mt-1 block font-semibold">
-              Tier: Gold Mandi Beneficiary
+              Tier: {points >= 500 ? 'Gold Mandi Beneficiary' : 'Standard Farmer'}
             </span>
           </div>
         </div>
 
-        {/* Ways to Earn Points Required by Prompt */}
+        {/* Ways to Earn Points */}
         <div className="pt-6">
           <h2 className="text-xs font-bold uppercase tracking-widest text-purple-300 mb-4">
-            Sample Ways to Earn Points:
+            Ways to Earn Points:
           </h2>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            {/* 1. Complete digital procurement +100 */}
             <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-xs flex items-center justify-between">
               <div>
                 <span className="font-bold block text-white">Complete digital procurement</span>
@@ -92,7 +93,6 @@ export const Rewards = () => {
               </span>
             </div>
 
-            {/* 2. Give feedback +25 */}
             <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-xs flex items-center justify-between">
               <div>
                 <span className="font-bold block text-white">Give feedback</span>
@@ -103,7 +103,6 @@ export const Rewards = () => {
               </span>
             </div>
 
-            {/* 3. Use recommended slot +50 */}
             <div className="bg-white/10 rounded-xl p-4 border border-white/10 backdrop-blur-xs flex items-center justify-between">
               <div>
                 <span className="font-bold block text-white">Use recommended slot</span>
@@ -117,7 +116,7 @@ export const Rewards = () => {
         </div>
       </div>
 
-      {/* Show Reward Cards (Prompt requirement) */}
+      {/* Show Reward Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
@@ -129,7 +128,7 @@ export const Rewards = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {rewardsCatalog.map((reward) => {
-            const canAfford = farmerProfile.points >= reward.costPoints;
+            const canAfford = points >= reward.costPoints;
             return (
               <div
                 key={reward.id}
@@ -164,7 +163,7 @@ export const Rewards = () => {
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <span className="text-xs text-slate-400">
-                    {reward.claimed ? 'Claimed' : canAfford ? 'Eligible for instant unlock' : `Need ${reward.costPoints - farmerProfile.points} more points`}
+                    {reward.claimed ? 'Claimed' : canAfford ? 'Eligible for instant unlock' : `Need ${reward.costPoints - points} more points`}
                   </span>
 
                   <button
@@ -190,19 +189,25 @@ export const Rewards = () => {
       {/* Rewards Transaction Activity History */}
       <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs">
         <h3 className="text-sm font-bold text-slate-900 mb-3">Points Activity Ledger</h3>
-        <div className="divide-y divide-slate-100 text-xs">
-          {rewardsHistory.map((item) => (
-            <div key={item.id} className="py-2.5 flex items-center justify-between">
-              <div>
-                <p className="font-medium text-slate-800">{item.action}</p>
-                <span className="text-[10px] text-slate-400">{item.date}</span>
+        {rewardsHistory.length === 0 ? (
+          <p className="text-xs text-slate-400 py-3 text-center">
+            No points earned yet. Book an optimal appointment slot or submit Mandi feedback to accumulate points.
+          </p>
+        ) : (
+          <div className="divide-y divide-slate-100 text-xs">
+            {rewardsHistory.map((item) => (
+              <div key={item.id} className="py-2.5 flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-slate-800">{item.action}</p>
+                  <span className="text-[10px] text-slate-400">{item.date}</span>
+                </div>
+                <span className={`font-mono font-bold ${item.points.startsWith('+') ? 'text-emerald-600' : 'text-purple-600'}`}>
+                  {item.points} pts
+                </span>
               </div>
-              <span className={`font-mono font-bold ${item.points.startsWith('+') ? 'text-emerald-600' : 'text-purple-600'}`}>
-                {item.points} pts
-              </span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

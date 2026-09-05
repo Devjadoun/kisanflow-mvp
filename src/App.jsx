@@ -8,6 +8,7 @@ import { Footer } from './components/common/Footer';
 // Public Pages
 import { LandingPage } from './pages/public/LandingPage';
 import { LoginPage } from './pages/public/LoginPage';
+import { RegistrationPage } from './pages/public/RegistrationPage';
 import { RoleSelectionPage } from './pages/public/RoleSelectionPage';
 
 // Farmer Pages (11 pages)
@@ -29,11 +30,14 @@ import { LiveQueueManagement } from './pages/operator/LiveQueueManagement';
 import { TodayBookings } from './pages/operator/TodayBookings';
 import { ProcurementManagement } from './pages/operator/ProcurementManagement';
 
-// Admin Pages (4 pages)
+// Admin Pages (6 pages)
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { CentrePerformance } from './pages/admin/CentrePerformance';
 import { Analytics } from './pages/admin/Analytics';
 import { AIPredictions } from './pages/admin/AIPredictions';
+import { DataStorageView } from './pages/admin/DataStorageView';
+import { SystemHealthView } from './pages/admin/SystemHealthView';
+
 
 // Main App Layout container
 const AppLayout = ({ children }) => {
@@ -70,6 +74,7 @@ export default function App() {
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegistrationPage />} />
             <Route path="/roles" element={<RoleSelectionPage />} />
 
             {/* Farmer Routes (11 Views) */}
@@ -91,11 +96,14 @@ export default function App() {
             <Route path="/operator/bookings" element={<TodayBookings />} />
             <Route path="/operator/procurement" element={<ProcurementManagement />} />
 
-            {/* Admin Routes (4 Views) */}
+            {/* Admin Routes (6 Views) */}
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/centres" element={<CentrePerformance />} />
             <Route path="/admin/analytics" element={<Analytics />} />
             <Route path="/admin/predictions" element={<AIPredictions />} />
+            <Route path="/admin/storage" element={<DataStorageView />} />
+            <Route path="/admin/health" element={<SystemHealthView />} />
+
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -15,6 +15,7 @@ import {
   Sparkles,
   ArrowRight,
   Printer,
+  AlertCircle,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DigitalReceiptModal } from '../../components/common/DigitalReceiptModal';
@@ -22,6 +23,27 @@ import { DigitalReceiptModal } from '../../components/common/DigitalReceiptModal
 export const BookingConfirmation = () => {
   const { activeBooking } = useApp();
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+
+  if (!activeBooking) {
+    return (
+      <div className="max-w-md mx-auto py-12 text-center space-y-4">
+        <div className="p-8 bg-white rounded-3xl border border-slate-200 shadow-sm">
+          <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
+          <h2 className="text-lg font-bold text-slate-900">No Active Booking Found</h2>
+          <p className="text-xs text-slate-500 mt-1 mb-6">
+            You don't have an active procurement token to display. Book a slot to generate your mandi token.
+          </p>
+          <Link
+            to="/farmer/book-slot"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-xs"
+          >
+            <span>Book a Slot Now</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 text-left py-6">

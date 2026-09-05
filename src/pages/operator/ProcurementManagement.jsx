@@ -55,7 +55,7 @@ export const ProcurementManagement = () => {
 
         <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-center">
           <span className="text-[10px] text-emerald-400 font-mono block">ACTIVE INTAKE TOKEN</span>
-          <span className="text-2xl font-black font-mono">{activeBooking.token}</span>
+          <span className="text-2xl font-black font-mono">{activeBooking?.token || 'None'}</span>
         </div>
       </div>
 
